@@ -1,5 +1,5 @@
 import numpy as np
-from sympy_transfer_mat import TransferMatrix
+#from sympy_transfer_mat import TransferMatrix
 
 class RotationMatrix:
 
@@ -77,8 +77,8 @@ class RotationMatrix:
         for idx, mat in enumerate(matrix_order):
             matrix_prod = matrix_prod@mat(angles[idx])
 
-        T = TransferMatrix()
-        T_lam = T(angles)
+        # T = TransferMatrix()
+        # T_lam = T(angles)
         
         return matrix_prod@vector#, T_lam
 
@@ -86,16 +86,16 @@ class RotationMatrix:
         rep = f'RotationMatrix(mat_order: {self.mat_order}, invert: {self.invert}'
         return rep
 
-if __name__ == '__main__':
-    order = ['z','y','x']
-    angles = [np.pi/2,np.pi/2,0]
-    vec = np.array([0,0,-9.81])
-    R = RotationMatrix(order)
-    R_inv = RotationMatrix(order,invert=True)
-    new_vec = R(angles, vec)
-    inv_vec = R_inv(angles,new_vec)
-    print(new_vec)
-    print(inv_vec)
+# if __name__ == '__main__':
+#     order = ['z','y','x']
+#     angles = [np.pi/2,np.pi/2,0]
+#     vec = np.array([0,0,-9.81])
+#     R = RotationMatrix(order)
+#     R_inv = RotationMatrix(order,invert=True)
+#     new_vec = R(angles, vec)
+#     inv_vec = R_inv(angles,new_vec)
+#     print(new_vec)
+#     print(inv_vec)
 
 
 

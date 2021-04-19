@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from rotation_matrices import RotationMatrix
 
 class SupportFilesDrone:
 
@@ -288,9 +289,52 @@ class SupportFilesDrone:
         # load constants
         m = self.constants['m']
         g = self.constants['g']
-        px = self.constants['px']
+        px = self.constants['px']  # in the form [lambda1, lambda2]
         py = self.constants['py']
         pz = self.constants['pz']
 
         # create the state states (u,v,w,p,q,r,x,y,z,phi,theta,psi)
+        u = states[0]
+        v = states[1]
+        w = states[2]
+        x = states[6]
+        y = states[7]
+        z = states[8]
+        phi = states[9]
+        theta = states[10]
+        psi = states[11]
+
+        # instantiate rotation matrix
+        R_matrix = RotationMatrix(['x','y','z'])
+        pos_vel_body = np.array([u,v,w])
+        pos_vel_fixed = R_matrix([phi, theta, psi], pos_vel_body)
+        x_dot = pos_vel_fixed[0]
+        y_dot = pos_vel_fixed[1]
+        z_dot = pos_vel_fixed[2]
+
+        # compute the errors
+        ex = x_ref - x
+        ex_dot = x_dot_ref - x_dot
+        ey = y_ref - y
+        ey_dot = y_dot_ref - y_dot
+        ez = z_ref - z
+        ez_dot = z_dot_ref - z_dot
+
+        # compute the error gain terms
+        k1x = (px[0] - (px[0]+px[1])/2)**2 - (px[0]+px[1])**2/4
+        k2x = px[0] + px[1]
+        k1x = k1x.real
+        k2x = k2x.real
+
+        k1y = (py[0] - (py[0]+py[1])/2)**2 - (py[0]+py[1])**2/4
+        k2y = py[0] + py[1]
+        k1y = k1y.real
+        k2y = k2y.real
+
+        k1z = (pz[0] - (pz[0]+pz[1])/2)**2 - (pz[0]+pz[1])**2/4
+        k2z = pz[0] + pz[1]
+        k1z = k1z.real
+        k2z = k2z.real
+
+
 
