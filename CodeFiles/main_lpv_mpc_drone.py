@@ -71,4 +71,6 @@ UTotal_ani = UTotal
 ########## BEGIN GLOBAL CONTROLLER ##########
 for i_global in range(0, plotl-1):
     # implement the position controller (feedback linearization)
-    phi_ref, theta_ref, U1 = support.pos_controller
+    phi_ref, theta_ref, U1 = support.pos_controller(x_ref[i_global+1], x_dot_ref[i_global+1], x_dot_dot_ref[i_global+1], y[i_global+1], y_dot_ref[i_global+1], y_dot_dot_ref[i_global+1], z[i_global+1], z_dot_ref[i_global+1], z_dot_dot_ref[i_global+1], psi_ref[i_global+1], states)
+    phi_ref = phi_ref*np.ones(innerDyn_length+1).T
+    theta_ref = theta_ref*np.ones(innerDyn_length+1).T

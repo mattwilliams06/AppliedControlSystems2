@@ -336,5 +336,39 @@ class SupportFilesDrone:
         k1z = k1z.real
         k2z = k2z.real
 
+        # Compute the values vx, vy, vz for the position controller
+        ux = ex*k1x + ex_dot*k2x
+        uy = ey*k1y + ey_dot*k2y
+        uz = ez*k1z + ez_dot*k2z
 
+        ######### ARE UX, UY, AND UZ LISTS LIKE WHAT MARK'S CODE SUGGESTS???? ##########
+        vx = x_dot_dot_ref - ux # this is really x_dot_dot
+        vy = y_dot_dot_ref - uy
+        vz = z_dot_dot_ref - uz
 
+        # compute phi, theta, and U1
+        a = vx/(vz + g)
+        b = vy/(vz + g)
+        c = np.cos(psi_ref)
+        d = np.sin(psi_ref)
+
+        tan_theta = a*c + b*d
+        theta_ref = np.arctan(tan_theta)
+
+        # Make psi_ref be between -2pi and 2pi
+        if psi_ref >= 0:
+            psi_ref_singularity = psi_ref - np.floor(psi_ref/(2*np.pi))*2*np.pi
+        else:
+            psi_ref_singularity = psi_ref + np.floor(psi_ref/(2*np.pi))*2*np.pi
+
+        # Recall that we want to choose the equation for tan_phi so that we do not divide by zero.
+        # The equation for tan_phi will be determined by which quadrant phi_ref is in
+        if (psi_ref_singularity < np.pi/4) or (psi_ref_singularity) > 7*np.pi/4 or (psi_ref_singularity > 3*np.pi/4 and psi_ref_singularity < 5*np.pi/4):
+            tan_phi = (np.cos(theta_ref)*(tan_theta*d-b))/c
+        else:
+            tan_phi = (np.cos(theta_ref)*(a - tan_theta*c))/d
+        
+        phi_ref = np.arctan(tan_phi)
+        U1 = m*(vz+g)/(np.cos(phi_ref)*np.cos(theta_ref))
+
+        return phi_ref, theta_ref, U1
