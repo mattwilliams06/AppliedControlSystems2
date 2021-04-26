@@ -97,7 +97,7 @@ for i_global in range(0, plotl-1):
 
     for i in range(0, innerDyn_length):
         # Generate the discrete state space matrices
-        Ad, Bd, Cd, Dc, x_dot, y_dot, z_dot, phi, phi_dot, theta, theta_dot, psi, psi_dot = support.LPV_cont_discrete(states, omega_total)
+        Ad, Bd, Cd, Dd, x_dot, y_dot, z_dot, phi, phi_dot, theta, theta_dot, psi, psi_dot = support.LPV_cont_discrete(states, omega_total)
         x_dot = x_dot.T
         y_dot = y_dot.T
         z_dot = z_dot.T
@@ -120,3 +120,58 @@ for i_global in range(0, plotl-1):
         # Generate the compact simplification matrices for the cost function
         Hdb, Fdbt, Cdb, Adc = support.mpc_simplification(Ad, Bd, Cd, Dd, hz)
         ft = np.concatenate((x_aug_t.T,r),axis=0)@Fdbt
+        du = -np.linlg.inv(Hdb)@Fdbt.T
+
+        # Update the control inputs
+        U2 += du[0][0]
+
+        UTotal = np.concatenate((UTotal,np.array([[U1,U2,U3,U4]])),axis=0)
+
+        # Compute the new omegas based on the new U values
+        U1C = U1/ct
+        U2C = U2/(ct*l)
+        U3C = U3/(ct*l)
+        U4C = U4/cq
+
+        UC_vector = np.zeros((4,1))
+        UC_vector[0,0] = U1C
+        UC_vector[1,0] = U2C
+        UC_vector[2,0] = U3C
+        UC_vector[3,0] = U4C
+
+        omega_matrix = np.zeros((4,4))
+        omega_matrix[0,:] = 1
+        omega_matrix[1,1] = 1
+        omega_matrix[1,3] = -1
+        omega_matrix[2,0] = -1
+        omega_matrix[2,2] = 1
+        omega_matrix[3,:] = 1
+        omega_matrix[3,0] = -1
+        omega_matrix[3,2] = -1
+
+        omega_matrix_inv = np.linalg.inv(omega_matrix)
+        omegas_vector = omega_matrix_inv@UC_vector
+
+        omega4P2 = omegas_vector[0,0]
+        omega3P2 = omegas_vector[1,0]
+        omega2P2 = omegas_vector[2,0]
+        omega1P2 = omegas_vector[3,0]
+
+        if omega1P2<=0 or omega2P2<=0 or omega3P2<=0 or omega4P2<=0:
+            print('You cannot take the square root of a negative number.')
+            print('The trajectory may be too chaotic or it may have discontinuities in the path.')
+            print('Try a smoother trajectory. Other causes may be variables such as Ts, hz, innerDyn_length,')
+            print('or the poles px, py, pz.')
+            exit()
+        else:
+            omega1 = np.sqrt(omega1P2)
+            omega2 = np.sqrt(omega2P2) 
+            omega3 = np.sqrt(omega3P2) 
+            omega4 = np.sqrt(omega4P2)  
+
+        omegas_bundle = np.concatenate((omegas_bundle, np.array([[omega1,omega2,omega3,omega4]])),axis=0)
+        
+        # Compute the new total omega
+        omega_total = omega1 - omega2 + omega3 - omega4
+        # Compute new states in the open loop system (interval Ts/10)
+        states, states_ani, U_ani = support.open_loop_new_states(states, omega_total, U1, U2, U3, U4)

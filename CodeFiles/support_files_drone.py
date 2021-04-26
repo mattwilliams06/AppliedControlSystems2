@@ -496,15 +496,94 @@ class SupportFilesDrone:
         A2 = np.linalg.matrix_power(A_aug, 2)
         A3 = np.linalg.matrix_power(A_aug, 3)
         A4 = np.linalg.matrix_power(A_aug, 4)
-        B_zeros = np.zeros_like(B)
-        Cdb = np.block([[B, B_zeros, B_zeros, B_zeros],
-                        [A2@B, B, B_zeros, B_zeros],
-                        [A3@B, A2@B, B, B_zeros],
-                        [A4@B, A3@B, A2@B, B]])
-        Adc = np.block([[A],[A2],[A3],[A4]])
+        B_zeros = np.zeros_like(Bd)
+        Cdb = np.block([[Bd, B_zeros, B_zeros, B_zeros],
+                        [A2@Bd, Bd, B_zeros, B_zeros],
+                        [A3@Bd, A2@Bd, Bd, B_zeros],
+                        [A4@Bd, A3@Bd, A2@Bd, Bd]])
+        Adc = np.block([[Ad],[A2],[A3],[A4]])
 
         Hdb = Cdb.T@Qdb@Cdb + Rdb
         Fdbt = np.block([[Adc.T@Qdb@Cdb],[-Tdb@Cdb]])
 
         return Hdb, Fdbt, Cdb, Adc
+
+    def state_space_derivs(self, state, drag, U1, U2, U3, U4, omega_total):
+        Ix = self.constants['Ix']
+        Iy = self.constants['Iy']
+        Iz = self.constants['Iz']
+        m = self.constants['m']
+        g = self.constants['g']
+        Jtp = self.constants['Jtp']
+        u = current_states[0]
+        v = current_states[1]
+        w = current_states[2]
+        p = current_states[3]
+        q = current_states[4]
+        r = current_states[5]
+        x = current_states[6]
+        y = current_states[7]
+        z = current_states[8]
+        phi = current_state[9]
+        theta = current_states[10]
+        psi = current_states[11]
+        Fd_u = drag[0]
+        Fd_v = drag[1]
+        Fd_w = drag[2]
+
+        u_dot = (v*r-w*q) + g*np.sin(theta) - Fd_u/m
+        v_dot = (w*p-u*r) - g*np.cos(theta)*np.sin(phi) - Fd_v/m
+        w_dot = (u*q-v*p) - g*np.cos(theta)*np.cos(phi) + U1/m - Fd_w/m
+        p_dot = q*r*(Iy-Iz)/Ix + Jtp/Ix*q*omega_total + U2/Ix
+        q_dot = p*r*(Iz-Ix)/Iy - Jtp/Iy*p*omega_total + U3/Iy
+        r_dot = p*q*(Ix-Iy)/Iz + U4/Iz
+
+        return np.array([u_dot, v_dot, w_dot, p_dot, q_dot, r_dot])
         
+    def open_loop_new_states(self, states, omega_total, U1, U2, U3, U4):
+        ''' This methof computed the new state vector one sample time later '''
+
+        # Get the necessary constants
+        Ix = self.constants['Ix']
+        Iy = self.constants['Iy']
+        Iz = self.constants['Iz']
+        m = self.constants['m']
+        g = self.constants['g']
+        Jtp = self.constants['Jtp']
+        Ts = self.constants['Ts'] 
+
+        # States: [u,v,w,p,q,r,x,y,z,phi,theta,psi]
+        current_states=states
+        new_states=current_states
+        u = current_states[0]
+        v = current_states[1]
+        w = current_states[2]
+        p = current_states[3]
+        q = current_states[4]
+        r = current_states[5]
+        x = current_states[6]
+        y = current_states[7]
+        z = current_states[8]
+        phi = current_state[9]
+        theta = current_states[10]
+        psi = current_states[11]
+        sub_loop = self.constants['sub_loop']
+        states_ani = np.zeros((sub_loop,6))
+        U_ani = np.zeros((sub_loop,4))
+
+        # Drag force
+        drag_switch = self.constants['drag_switch']
+        C_D_u = self.constants['C_D_u']
+        C_D_V = self.constants['C_D_v']
+        C_D_w = self.constants['C_D_w']
+        A_u = self.constants['A_u']
+        A_v = self.constants['A_v']
+        A_w = self.constants['A_w']
+        rho = self.constants['rho']
+
+        for j in range(0,4):
+
+            if drag_switch==1:
+                Fd_u=0.5*C_D_u*rho*u**2*A_u
+                Fd_v=0.5*C_D_v*rho*v**2*A_v
+                Fd_w=0.5*C_D_w*rho*w**2*A_w
