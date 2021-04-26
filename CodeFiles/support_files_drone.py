@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from rotation_matrices import RotationMatrix
+import scipy.linalg
 
 class SupportFilesDrone:
 
@@ -284,7 +285,7 @@ class SupportFilesDrone:
 
         return x, x_dot, x_dot_dot, y, y_dot, y_dot_dot, z, z_dot, z_dot_dot, psiInt
 
-    def pos_controller(self, x_ref, x_dot_ref, x_dot_dot_ref, y, y_dot_ref, y_dot_dot_ref, z, z_dot_ref, z_dot_dot_ref, psi_ref, states):
+    def pos_controller(self, x_ref, x_dot_ref, x_dot_dot_ref, y_ref, y_dot_ref, y_dot_dot_ref, z_ref, z_dot_ref, z_dot_dot_ref, psi_ref, states):
         ''' Position controller -- computes the U1 for the open-loop system, and the phi and theta angles for the MPC controller'''
         # load constants
         m = self.constants['m']
@@ -372,3 +373,138 @@ class SupportFilesDrone:
         U1 = m*(vz+g)/(np.cos(phi_ref)*np.cos(theta_ref))
 
         return phi_ref, theta_ref, U1
+
+    def LPV_cont_discrete(self, states, omega_total):
+        ''' This is an LPV model concerning the three rotational axes '''
+
+        # Get the necessary constants
+        Ix = self.constants['Ix']
+        Iy = self.constants['Iy']
+        Iz = self.constants['Iz']
+        Jtp = self.constants['Jtp']
+        Ts = self.constants['Ts']
+
+        # Assign the states
+        # States: [u,v,w,p,q,r,x,y,z,phi,theta,psi]
+        u = states[0]
+        v = states[1]
+        w = states[2]
+        p = states[3]
+        q = states[4]
+        r = states[5]
+        phi = states[9]
+        theta = states[10]
+        psi = states[11]
+
+        # rotational matrix that relates u,v,w with x_dot, y_dot, z_dot
+        Rmat = RotationMatrix(['x','y','z'])
+        pos_vel_body = np.array([u,v,w])
+        pos_vel_fixed = Rmat([phi,theta,psi],pos_vel_body)
+        x_dot = pos_vel_fixed[0]
+        y_dot = pos_vel_fixed[1]
+        z_dot = pos_vel_fixed[2]
+        # I only think the code below is necessary in Mark's code, where he uses a column vector in the matrix
+        # multiplication, and therefore gets a 2D array as output
+        # x_dot = x_dot[0]
+        # y_dot = y_dot[0]
+        # z_dot = z_dot[0]
+
+        # To get phi_dot, theta_dot, and psi_dot, we need the transformation matrix
+        # This is the matrix that relates the body frame rotation rates p, q, and r to 
+        # phi_dot, theta_dot, and psi_dot
+        Rx = Rmat._Rx(phi)
+        Ry = Rmat._Ry(theta)
+        mat_coef = []
+        for i in range(3):
+            mat = np.zeros((3,3))
+            mat[i,i] = 1
+            mat_coef.append(mat)
+        Tinv = mat_coef[0] + np.linalg.inv(Rx)@mat_coef[1] + np.linalg.inv(Ry@Rx)@mat_coef[2]
+        Tmat = np.linalg.inv(Tinv)
+        rot_vel_body = np.array([p,q,r])
+        rot_vel_fixed = Tmat@rot_vel_body
+        phi_dot = rot_vel_fixed[0]
+        theta_dot = rot_vel_fixed[1]
+        psi_dot = rot_vel_fixed[2]
+
+        # Create the continuous LPV A, B, C, D matrices
+        A01 = 1
+        A13 = Jtp*omega_total/Ix
+        A15 = theta_dot*(Iy-Iz)/Ix
+        A23 = 1
+        A31 = Jtp*omega_total/Iy
+        A35 = phi_dot*(Iz-Ix)/Iy
+        A45 = 1
+        A51 = theta_dot/2*(Ix-Iy)/Iz
+        A53 = theta_dot/2*(Ix-Iy)/Iz
+
+        A = np.zeros((6,6))
+        B = np.zeros((6,3))
+        C = np.zeros((3,6))
+        D = np.zeros((3,3))
+
+        A[0,1] = A01
+        A[1,3] = A13
+        A[1,5] = A15
+        A[2,3] = A23
+        A[3,1] = A31
+        A[3,5] = A35
+        A[4,5] = A45
+        A[5,1] = A51
+        A[5,3] = A53
+
+        B[1,0] = 1/Ix
+        B[3,1] = 1/Iy
+        B[5,2] = 1/Iz
+
+        C[0,0] = 1
+        C[1,2] = 1
+        C[2,4] = 1
+
+        # Discretize the system using forward Euler
+        Ad = np.eye(np.size(A,1)) + Ts*A
+        Bd = Ts*B
+        Cd = C
+        Dd = D
+
+        return Ad, Bd, Cd, Dd, x_dot, y_dot, z_dot, phi, phi_dot, theta, theta_dot, psi, psi_dot
+
+    def mpc_simplification(self, Ad, Bd, Cd, Dd, hz):
+        ''' Create the larger matrices for MPC simplification '''
+        big_zero = np.zeros((np.size(Bd,1), np.size(Ad,1)))
+        big_I = np.eye(np.size(Bd,1))
+        A_aug = np.block([[Ad, Bd],[big_zero, big_I]])
+        B_aug = np.block([[Bd],[big_I]])
+        C_aug = np.block([Cd, big_zero])
+
+        Q = self.constants['Q']
+        S = self.constants['S']
+        R = self.constants['R']
+
+        CQC = C_aug.T@Q@C_aug
+        CSC = C_aug.T@S@C_aug
+        QC = Q@C_aug
+        SC = S@C_aug
+
+        CQC_list = [CQC]*(hz-1)
+        Qdb = scipy.linalg.block_diag(*CQC_list, CSC)
+        QC_list = [QC]*(hz-1)
+        Tdb = scipy.linalg.block_diag(*QC_list, SC)
+        R_list = [R]*hz
+        Rdb = scipy.linalg.block_diag(*R_list)
+
+        A2 = np.linalg.matrix_power(A_aug, 2)
+        A3 = np.linalg.matrix_power(A_aug, 3)
+        A4 = np.linalg.matrix_power(A_aug, 4)
+        B_zeros = np.zeros_like(B)
+        Cdb = np.block([[B, B_zeros, B_zeros, B_zeros],
+                        [A2@B, B, B_zeros, B_zeros],
+                        [A3@B, A2@B, B, B_zeros],
+                        [A4@B, A3@B, A2@B, B]])
+        Adc = np.block([[A],[A2],[A3],[A4]])
+
+        Hdb = Cdb.T@Qdb@Cdb + Rdb
+        Fdbt = np.block([[Adc.T@Qdb@Cdb],[-Tdb@Cdb]])
+
+        return Hdb, Fdbt, Cdb, Adc
+        
