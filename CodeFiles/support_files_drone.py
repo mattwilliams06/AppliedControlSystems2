@@ -587,3 +587,13 @@ class SupportFilesDrone:
                 Fd_u=0.5*C_D_u*rho*u**2*A_u
                 Fd_v=0.5*C_D_v*rho*v**2*A_v
                 Fd_w=0.5*C_D_w*rho*w**2*A_w
+            elif drag_switch==0:
+                Fd_u=0
+                Fd_v=0
+                Fd_w=0
+            else:
+                print('drag_switch variable must be either 0 or 1 in the __init__ method.')
+                exit()
+
+            drag_vec = [Fd_u, Fd_v, Fd_w]
+            slopes = self.state_space_derivs(states,drag_vec,U1,U2,U3,U4,omega_total)
