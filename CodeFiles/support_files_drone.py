@@ -471,11 +471,22 @@ class SupportFilesDrone:
 
     def mpc_simplification(self, Ad, Bd, Cd, Dd, hz):
         ''' Create the larger matrices for MPC simplification '''
-        big_zero = np.zeros((np.size(Bd,1), np.size(Ad,1)))
-        big_I = np.eye(np.size(Bd,1))
-        A_aug = np.block([[Ad, Bd],[big_zero, big_I]])
-        B_aug = np.block([[Bd],[big_I]])
-        C_aug = np.block([Cd, big_zero])
+        # big_zero = np.zeros((np.size(Bd,1), np.size(Ad,1)))
+        # big_I = np.eye(np.size(Bd,1))
+        # A_aug = np.block([[Ad, Bd],[big_zero, big_I]])
+        # B_aug = np.block([[Bd],[big_I]])
+        # big_zero = np.zeros((np.size(Cd,0),np.size(Bd,1)))
+        # C_aug = np.block([Cd, big_zero])
+        # print('A aug shape: ', A_aug.shape)
+        A_aug=np.concatenate((Ad,Bd),axis=1)
+        temp1=np.zeros((np.size(Bd,1),np.size(Ad,1)))
+        temp2=np.identity(np.size(Bd,1))
+        temp=np.concatenate((temp1,temp2),axis=1)
+
+        A_aug=np.concatenate((A_aug,temp),axis=0)
+        B_aug=np.concatenate((Bd,np.identity(np.size(Bd,1))),axis=0)
+        C_aug=np.concatenate((Cd,np.zeros((np.size(Cd,0),np.size(Bd,1)))),axis=1)
+        D_aug=Dd
 
         Q = self.constants['Q']
         S = self.constants['S']
@@ -487,50 +498,153 @@ class SupportFilesDrone:
         SC = S@C_aug
 
         CQC_list = [CQC]*(hz-1)
+        # Qdb=np.zeros((np.size(CQC,0)*hz,np.size(CQC,1)*hz))
         Qdb = scipy.linalg.block_diag(*CQC_list, CSC)
         QC_list = [QC]*(hz-1)
         Tdb = scipy.linalg.block_diag(*QC_list, SC)
         R_list = [R]*hz
         Rdb = scipy.linalg.block_diag(*R_list)
-
         A2 = np.linalg.matrix_power(A_aug, 2)
         A3 = np.linalg.matrix_power(A_aug, 3)
         A4 = np.linalg.matrix_power(A_aug, 4)
-        B_zeros = np.zeros_like(Bd)
-        Cdb = np.block([[Bd, B_zeros, B_zeros, B_zeros],
-                        [A2@Bd, Bd, B_zeros, B_zeros],
-                        [A3@Bd, A2@Bd, Bd, B_zeros],
-                        [A4@Bd, A3@Bd, A2@Bd, Bd]])
-        Adc = np.block([[Ad],[A2],[A3],[A4]])
+        B_zeros = np.zeros_like(B_aug)
+        Cdb=np.zeros((np.size(B_aug,0)*hz,np.size(B_aug,1)*hz))
+        Adc=np.zeros((np.size(A_aug,0)*hz,np.size(A_aug,1)))
 
+        for row in range(hz):
+            for col in range(hz):
+                if row <= col:
+                    Cdb[B_aug.shape[0]*row:B_aug.shape[0]*row+B_aug.shape[0],B_aug.shape[1]*col:B_aug.shape[1]*col+B_aug.shape[1]] = \
+                        np.matmul(np.linalg.matrix_power(A_aug,((row+1)-(col+1))),B_aug)
+                    
+        # Cdb = np.block([[B_aug, B_zeros, B_zeros, B_zeros],
+        #                 [A2@B_aug, B_aug, B_zeros, B_zeros],
+        #                 [A3@B_aug, A2@B_aug, B_aug, B_zeros],
+        #                 [A4@B_aug, A3@B_aug, A2@B_aug, B_aug]])
+            Adc[np.size(A_aug,0)*row:np.size(A_aug,0)*row+A_aug.shape[0],0:0+A_aug.shape[1]]=np.linalg.matrix_power(A_aug,row+1)
+        # Adc = np.block([[A_aug],[A2],[A3],[A4]])
+
+        # print('Cdb.T shape: ', Cdb.T.shape)
+        # print('Qdb shape: ', Qdb.shape)
+        # print('Cdb shape: ', Cdb.shape)
+        # print('Rdb shape: ', Rdb.shape)
+        # print('B aug: ', B_aug.shape)
         Hdb = Cdb.T@Qdb@Cdb + Rdb
         Fdbt = np.block([[Adc.T@Qdb@Cdb],[-Tdb@Cdb]])
 
         return Hdb, Fdbt, Cdb, Adc
+        # '''This function creates the compact matrices for Model Predictive Control'''
+        # # db - double bar
+        # # dbt - double bar transpose
+        # # dc - double circumflex
+        # A_aug=np.concatenate((Ad,Bd),axis=1)
+        # temp1=np.zeros((np.size(Bd,1),np.size(Ad,1)))
+        # temp2=np.identity(np.size(Bd,1))
+        # temp=np.concatenate((temp1,temp2),axis=1)
 
-    def state_space_derivs(self, state, drag, U1, U2, U3, U4, omega_total):
+        # A_aug=np.concatenate((A_aug,temp),axis=0)
+        # B_aug=np.concatenate((Bd,np.identity(np.size(Bd,1))),axis=0)
+        # C_aug=np.concatenate((Cd,np.zeros((np.size(Cd,0),np.size(Bd,1)))),axis=1)
+        # D_aug=Dd
+
+
+        # # Q=self.constants[7]
+        # # S=self.constants[8]
+        # # R=self.constants[9]
+
+        # CQC=np.matmul(np.transpose(C_aug),Q)
+        # CQC=np.matmul(CQC,C_aug)
+
+        # CSC=np.matmul(np.transpose(C_aug),S)
+        # CSC=np.matmul(CSC,C_aug)
+
+        # QC=np.matmul(Q,C_aug)
+        # SC=np.matmul(S,C_aug)
+
+
+        # Qdb=np.zeros((np.size(CQC,0)*hz,np.size(CQC,1)*hz))
+        # Tdb=np.zeros((np.size(QC,0)*hz,np.size(QC,1)*hz))
+        # Rdb=np.zeros((np.size(R,0)*hz,np.size(R,1)*hz))
+        # Cdb=np.zeros((np.size(B_aug,0)*hz,np.size(B_aug,1)*hz))
+        # Adc=np.zeros((np.size(A_aug,0)*hz,np.size(A_aug,1)))
+
+        # for i in range(0,hz):
+        #     if i == hz-1:
+        #         Qdb[np.size(CSC,0)*i:np.size(CSC,0)*i+CSC.shape[0],np.size(CSC,1)*i:np.size(CSC,1)*i+CSC.shape[1]]=CSC
+        #         Tdb[np.size(SC,0)*i:np.size(SC,0)*i+SC.shape[0],np.size(SC,1)*i:np.size(SC,1)*i+SC.shape[1]]=SC
+        #     else:
+        #         Qdb[np.size(CQC,0)*i:np.size(CQC,0)*i+CQC.shape[0],np.size(CQC,1)*i:np.size(CQC,1)*i+CQC.shape[1]]=CQC
+        #         Tdb[np.size(QC,0)*i:np.size(QC,0)*i+QC.shape[0],np.size(QC,1)*i:np.size(QC,1)*i+QC.shape[1]]=QC
+
+        #     Rdb[np.size(R,0)*i:np.size(R,0)*i+R.shape[0],np.size(R,1)*i:np.size(R,1)*i+R.shape[1]]=R
+
+        #     for j in range(0,hz):
+        #         if j<=i:
+        #             Cdb[np.size(B_aug,0)*i:np.size(B_aug,0)*i+B_aug.shape[0],np.size(B_aug,1)*j:np.size(B_aug,1)*j+B_aug.shape[1]]=np.matmul(np.linalg.matrix_power(A_aug,((i+1)-(j+1))),B_aug)
+
+        #     Adc[np.size(A_aug,0)*i:np.size(A_aug,0)*i+A_aug.shape[0],0:0+A_aug.shape[1]]=np.linalg.matrix_power(A_aug,i+1)
+
+        # Hdb=np.matmul(np.transpose(Cdb),Qdb)
+        # Hdb=np.matmul(Hdb,Cdb)+Rdb
+
+        # temp=np.matmul(np.transpose(Adc),Qdb)
+        # temp=np.matmul(temp,Cdb)
+
+        # temp2=np.matmul(-Tdb,Cdb)
+        # Fdbt=np.concatenate((temp,temp2),axis=0)
+        # print('Qdb shape: ', Qdb.shape)
+        # print('Cdb shape: ', Cdb.shape)
+        # print('Rdb shape: ', Rdb.shape)
+
+        # return Hdb,Fdbt,Cdb,Adc
+
+    def state_space_derivs(self, states, U1, U2, U3, U4, omega_total):
+        ''' Need to re-write the return so that it gives the derivatives of the state vector. Need to figure out
+        where the angle derivatives come from. '''
+        # States: [u,v,w,p,q,r,x,y,z,phi,theta,psi]
+        
         Ix = self.constants['Ix']
         Iy = self.constants['Iy']
         Iz = self.constants['Iz']
         m = self.constants['m']
         g = self.constants['g']
         Jtp = self.constants['Jtp']
-        u = current_states[0]
-        v = current_states[1]
-        w = current_states[2]
-        p = current_states[3]
-        q = current_states[4]
-        r = current_states[5]
-        x = current_states[6]
-        y = current_states[7]
-        z = current_states[8]
-        phi = current_state[9]
-        theta = current_states[10]
-        psi = current_states[11]
-        Fd_u = drag[0]
-        Fd_v = drag[1]
-        Fd_w = drag[2]
+        u = states[0]
+        v = states[1]
+        w = states[2]
+        p = states[3]
+        q = states[4]
+        r = states[5]
+        x = states[6]
+        y = states[7]
+        z = states[8]
+        phi = states[9]
+        theta = states[10]
+        psi = states[11]
 
+        # Drag force
+        drag_switch = self.constants['drag_switch']
+        C_D_u = self.constants['C_D_u']
+        C_D_V = self.constants['C_D_v']
+        C_D_w = self.constants['C_D_w']
+        A_u = self.constants['A_u']
+        A_v = self.constants['A_v']
+        A_w = self.constants['A_w']
+        rho = self.constants['rho']
+
+        if drag_switch==1:
+            Fd_u=0.5*C_D_u*rho*u**2*A_u
+            Fd_v=0.5*C_D_v*rho*v**2*A_v
+            Fd_w=0.5*C_D_w*rho*w**2*A_w
+        elif drag_switch==0:
+            Fd_u=0
+            Fd_v=0
+            Fd_w=0
+        else:
+            print('drag_switch variable must be either 0 or 1 in the __init__ method.')
+            exit()
+
+        # Calculate accelerations
         u_dot = (v*r-w*q) + g*np.sin(theta) - Fd_u/m
         v_dot = (w*p-u*r) - g*np.cos(theta)*np.sin(phi) - Fd_v/m
         w_dot = (u*q-v*p) - g*np.cos(theta)*np.cos(phi) + U1/m - Fd_w/m
@@ -538,6 +652,7 @@ class SupportFilesDrone:
         q_dot = p*r*(Iz-Ix)/Iy - Jtp/Iy*p*omega_total + U3/Iy
         r_dot = p*q*(Ix-Iy)/Iz + U4/Iz
 
+        # Return accelerations
         return np.array([u_dot, v_dot, w_dot, p_dot, q_dot, r_dot])
         
     def open_loop_new_states(self, states, omega_total, U1, U2, U3, U4):
@@ -553,47 +668,78 @@ class SupportFilesDrone:
         Ts = self.constants['Ts'] 
 
         # States: [u,v,w,p,q,r,x,y,z,phi,theta,psi]
-        current_states=states
-        new_states=current_states
-        u = current_states[0]
-        v = current_states[1]
-        w = current_states[2]
-        p = current_states[3]
-        q = current_states[4]
-        r = current_states[5]
-        x = current_states[6]
-        y = current_states[7]
-        z = current_states[8]
-        phi = current_state[9]
-        theta = current_states[10]
-        psi = current_states[11]
+        u0 = states[0]
+        v0 = states[1]
+        w0 = states[2]
+        p0 = states[3]
+        q0 = states[4]
+        r0 = states[5]
+        x0 = states[6]
+        y0 = states[7]
+        z0 = states[8]
+        phi0 = states[9]
+        theta0 = states[10]
+        psi0 = states[11]
         sub_loop = self.constants['sub_loop']
         states_ani = np.zeros((sub_loop,6))
         U_ani = np.zeros((sub_loop,4))
 
-        # Drag force
-        drag_switch = self.constants['drag_switch']
-        C_D_u = self.constants['C_D_u']
-        C_D_V = self.constants['C_D_v']
-        C_D_w = self.constants['C_D_w']
-        A_u = self.constants['A_u']
-        A_v = self.constants['A_v']
-        A_w = self.constants['A_w']
-        rho = self.constants['rho']
+        # Get positon and angular velocities in the inertial frame from the body frame
+        Rmat = RotationMatrix(['x','y','z'])
+        pos_vel_body = np.array([u0, v0, w0])
+        angles = [phi0, theta0, psi0]
+        pos_vel_fixed = Rmat(angles, pos_vel_body)
+        x_dot=pos_vel_fixed[0]
+        y_dot=pos_vel_fixed[1]
+        z_dot=pos_vel_fixed[2]
+        rot_vel_body = np.array([p0, q0, r0])
+        # Transfer matrix for angular velocities
+        T_matrix=np.array([[1,np.sin(phi0)*np.tan(theta0),np.cos(phi0)*np.tan(theta0)],\
+                [0,np.cos(phi0),-np.sin(phi0)],\
+                [0,np.sin(phi0)/np.cos(theta0),np.cos(phi0)/np.cos(theta0)]])
+        rot_vel_body=np.array([p0,q0,r0])
+        rot_vel_fixed=np.matmul(T_matrix,rot_vel_body)
+        phi_dot=rot_vel_fixed[0]
+        theta_dot=rot_vel_fixed[1]
+        psi_dot=rot_vel_fixed[2]
 
-        for j in range(0,4):
+        ###### BEGIN RUNGE KUTTA ALGORITHM ######
+        accels1 = self.state_space_derivs(states, U1, U2, U3, U4, omega_total)
+        k1 = np.concatenate((accels1, [x_dot, y_dot, z_dot, phi_dot, theta_dot, psi_dot]))
+        accels2 = self.state_space_derivs(states+k1*Ts/2, U1, U2, U4, U4, omega_total)
+        k2 = np.concatenate((accels2, [x_dot, y_dot, z_dot, phi_dot, theta_dot, psi_dot]))
+        accels3 = self.state_space_derivs(states+k2*Ts/2, U1, U2, U4, U4, omega_total)
+        k3 = np.concatenate((accels3, [x_dot, y_dot, z_dot, phi_dot, theta_dot, psi_dot]))
+        accels4 = self.state_space_derivs(states+k3*Ts, U1, U2, U4, U4, omega_total)
+        k4 = np.concatenate((accels4, [x_dot, y_dot, z_dot, phi_dot, theta_dot, psi_dot]))
 
-            if drag_switch==1:
-                Fd_u=0.5*C_D_u*rho*u**2*A_u
-                Fd_v=0.5*C_D_v*rho*v**2*A_v
-                Fd_w=0.5*C_D_w*rho*w**2*A_w
-            elif drag_switch==0:
-                Fd_u=0
-                Fd_v=0
-                Fd_w=0
-            else:
-                print('drag_switch variable must be either 0 or 1 in the __init__ method.')
-                exit()
+        k = 1/6*(k1 + 2*k2 + 2*k3 + k4)
+        new_states = states + k*Ts
+        # Do i need the variable declarations below??
+        u = new_states[0]
+        v = new_states[1]
+        w = new_states[2]
+        p = new_states[3]
+        q = new_states[4]
+        r = new_states[5]
+        x = new_states[6]
+        y = new_states[7]
+        z = new_states[8]
+        phi = new_states[9]
+        theta = new_states[10]
+        psi = new_states[11]
+        ###### END RUTTA KUTTA ALGORITHM ######
+        for k in range(0,sub_loop):
+            states_ani[k,0]=x0+(x-x0)/Ts*(k/(sub_loop-1))*Ts
+            states_ani[k,1]=y0+(y-y0)/Ts*(k/(sub_loop-1))*Ts
+            states_ani[k,2]=z0+(z-z0)/Ts*(k/(sub_loop-1))*Ts
+            states_ani[k,3]=phi0+(phi-phi0)/Ts*(k/(sub_loop-1))*Ts
+            states_ani[k,4]=theta0+(theta-theta0)/Ts*(k/(sub_loop-1))*Ts
+            states_ani[k,5]=psi0+(psi-psi0)/Ts*(k/(sub_loop-1))*Ts
 
-            drag_vec = [Fd_u, Fd_v, Fd_w]
-            slopes = self.state_space_derivs(states,drag_vec,U1,U2,U3,U4,omega_total)
+        U_ani[:,0]=U1
+        U_ani[:,1]=U2
+        U_ani[:,2]=U3
+        U_ani[:,3]=U4
+
+        return new_states, states_ani, U_ani

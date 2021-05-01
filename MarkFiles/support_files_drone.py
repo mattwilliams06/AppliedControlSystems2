@@ -475,7 +475,6 @@ class SupportFilesDrone:
         C_aug=np.concatenate((Cd,np.zeros((np.size(Cd,0),np.size(Bd,1)))),axis=1)
         D_aug=Dd
 
-
         Q=self.constants[7]
         S=self.constants[8]
         R=self.constants[9]
@@ -495,6 +494,9 @@ class SupportFilesDrone:
         Rdb=np.zeros((np.size(R,0)*hz,np.size(R,1)*hz))
         Cdb=np.zeros((np.size(B_aug,0)*hz,np.size(B_aug,1)*hz))
         Adc=np.zeros((np.size(A_aug,0)*hz,np.size(A_aug,1)))
+        print('Qdb: ', Qdb.shape)
+        print('Cdb: ', Cdb.shape)
+        print('Rdb: ', Rdb.shape)
 
         for i in range(0,hz):
             if i == hz-1:
@@ -520,6 +522,9 @@ class SupportFilesDrone:
 
         temp2=np.matmul(-Tdb,Cdb)
         Fdbt=np.concatenate((temp,temp2),axis=0)
+        # print('Qdb shape: ', Qdb.shape)
+        # print('Cdb shape: ', Cdb.shape)
+        # print('Rdb shape: ', Rdb.shape)
 
         return Hdb,Fdbt,Cdb,Adc
 

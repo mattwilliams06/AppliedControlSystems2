@@ -62,13 +62,13 @@ if __name__ == '__main__':
     # print(f'Calculated terminal velocity: {term_vel:.3f}')
 
     def derivs(_, t, *args):
-        return t
+        return t**2
 
     dx = 0.01
     x = np.array([[-2]])
     xf = 2
     nx = int((xf-x[0,0])/dx)
-    y = np.array([[2**2/2]])
+    y = np.array([[(-2)**3/3]])
     params = {'dt':dx}
     rk4 = RK4(derivs, params)
 
@@ -78,8 +78,8 @@ if __name__ == '__main__':
         y = np.append(y, yn,axis=0)
         x = np.append(x, np.array([xn]),axis=0)
 
-    plt.plot(x, x, label='function')
+    plt.plot(x, x**2, label='function')
     plt.plot(x, y, label='integral')
-    plt.plot(x,x**2/2, label='exact',ls=':')
+    plt.plot(x,x**3/3, label='exact',ls=':')
     plt.legend()
     plt.show()
